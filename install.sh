@@ -131,12 +131,15 @@ do_install() {
   done
 }
 
-# remove_link <target> : delete only if symlink pointing under SKILLS_DIR
+# remove_link <target> [mode] : delete only if symlink pointing under SKILLS_DIR
+# mode dryrun mutates nothing and reports would-remove in place of removed
 remove_link() {
-  local target="$1"
+  local target="$1" mode="${2:-default}"
   if [ -L "$target" ]; then
     case "$(readlink "$target")" in
-      "$SKILLS_DIR"/*) rm "$target"; echo "removed"; return ;;
+      "$SKILLS_DIR"/*)
+        [ "$mode" = dryrun ] && { echo "would-remove"; return; }
+        rm "$target"; echo "removed"; return ;;
       *) echo "skipped-foreign"; return ;;
     esac
   fi
@@ -157,13 +160,13 @@ do_list() {
   done < <(list_skills)
 }
 
-# do_uninstall <cli> <scope> <name...>
+# do_uninstall <cli> <scope> <mode> <name...>
 do_uninstall() {
-  local cli="$1" scope="$2"; shift 2
+  local cli="$1" scope="$2" mode="$3"; shift 3
   local name target
   for name in "$@"; do
     target="$(target_path "$cli" "$scope" "$name")" || continue
-    printf '%s: %s\n' "$name" "$(remove_link "$target")"
+    printf '%s: %s\n' "$name" "$(remove_link "$target" "$mode")"
   done
 }
 
@@ -229,7 +232,7 @@ main() {
   local mode; mode="$(resolve_mode)"
   case "$ACTION" in
     list)      do_list "$CLI" "$SCOPE" ;;
-    uninstall) do_uninstall "$CLI" "$SCOPE" ${names[@]+"${names[@]}"} ;;
+    uninstall) do_uninstall "$CLI" "$SCOPE" "$mode" ${names[@]+"${names[@]}"} ;;
     *)         do_install "$CLI" "$SCOPE" "$mode" ${names[@]+"${names[@]}"} ;;
   esac
 }

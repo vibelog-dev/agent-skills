@@ -181,5 +181,19 @@ assert_true "uninstall skips real dir" grep -q 'alpha: skipped-real' <<<"$uno2"
 assert_true "real dir still there" test -d "$home7/.claude/skills/alpha"
 rm -rf "$i7" "$home7"
 
+# Task 8 (Bug 1): --uninstall --dry-run must not delete links
+i8="$(mktemp -d)"; home8="$(mktemp -d)"
+mkdir -p "$i8/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i8/skills/alpha/SKILL.md"
+HOME="$home8" SKILLS_DIR="$i8/skills" bash "$ROOT/install.sh" --cli claude --scope global --all >/dev/null
+dry8="$(HOME="$home8" SKILLS_DIR="$i8/skills" bash "$ROOT/install.sh" --cli claude --scope global --all --uninstall --dry-run)"
+assert_true "dry-run uninstall says would-remove" grep -q 'alpha: would-remove' <<<"$dry8"
+assert_true "dry-run kept the symlink" test -L "$home8/.claude/skills/alpha"
+# real uninstall then removes it
+real8="$(HOME="$home8" SKILLS_DIR="$i8/skills" bash "$ROOT/install.sh" --cli claude --scope global --all --uninstall)"
+assert_true "real uninstall removed alpha" grep -q 'alpha: removed' <<<"$real8"
+assert_false "alpha symlink gone after real uninstall" test -L "$home8/.claude/skills/alpha"
+rm -rf "$i8" "$home8"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
