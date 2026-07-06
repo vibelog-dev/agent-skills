@@ -129,5 +129,17 @@ assert_true "dry-run says would-link alpha" grep -q 'alpha: would-link' <<<"$out
 assert_false "dry-run created nothing" test -e "$home5b/.pi/agent/skills/alpha"
 rm -rf "$i5" "$home5" "$home5b"
 
+# Task 6: interactive selection driven by piped stdin
+i6="$(mktemp -d)"; home6="$(mktemp -d)"
+mkdir -p "$i6/skills/alpha" "$i6/skills/beta"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i6/skills/alpha/SKILL.md"
+printf -- '---\nname: beta\ndescription: b\n---\n'  > "$i6/skills/beta/SKILL.md"
+# stdin lines: CLI choice (1=claude), scope choice (1=global), skills (1 = alpha)
+out6="$(printf '1\n1\n1\n' | HOME="$home6" SKILLS_DIR="$i6/skills" bash "$ROOT/install.sh")"
+assert_true "interactive linked alpha" grep -q 'alpha: linked' <<<"$out6"
+assert_true "alpha symlink exists" test -L "$home6/.claude/skills/alpha"
+assert_false "beta not selected" test -e "$home6/.claude/skills/beta"
+rm -rf "$i6" "$home6"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

@@ -121,6 +121,30 @@ do_install() {
   done
 }
 
+# prompt_choice <varname> <prompt> <option...> : numbered single choice
+prompt_choice() {
+  local var="$1" prompt="$2"; shift 2
+  local -a opts=("$@") i reply
+  for i in "${!opts[@]}"; do printf '  %d) %s\n' "$((i+1))" "${opts[$i]}" >&2; done
+  printf '%s ' "$prompt" >&2; read -r reply
+  [ "$reply" -ge 1 ] 2>/dev/null && [ "$reply" -le "${#opts[@]}" ] || { echo "invalid choice" >&2; return 1; }
+  printf -v "$var" '%s' "${opts[$((reply-1))]}"
+}
+
+# prompt_skills : sets global array `names` from a numbered multi-select
+prompt_skills() {
+  local -a all=() ; local n i reply
+  while IFS= read -r n; do all+=("$n"); done < <(list_skills)
+  for i in "${!all[@]}"; do printf '  %d) %s\n' "$((i+1))" "${all[$i]}" >&2; done
+  printf 'skills (space/comma separated numbers, or "all"): ' >&2; read -r reply
+  names=()
+  if [ "$reply" = all ]; then names=("${all[@]}"); return; fi
+  reply="${reply//,/ }"
+  for i in $reply; do
+    [ "$i" -ge 1 ] 2>/dev/null && [ "$i" -le "${#all[@]}" ] && names+=("${all[$((i-1))]}")
+  done
+}
+
 main() {
   set -euo pipefail
   MAIN_RAN=1
@@ -150,9 +174,14 @@ main() {
   elif [ -n "$SKILLS_ARG" ]; then
     IFS=',' read -r -a names <<<"$SKILLS_ARG"
   fi
+  [ -n "$CLI" ]   || prompt_choice CLI   "CLI?"   claude cursor pi
+  [ -n "$SCOPE" ] || prompt_choice SCOPE "Scope?" global project
+  if [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
+    prompt_skills
+  fi
 
   local mode; mode="$(resolve_mode)"
-  do_install "$CLI" "$SCOPE" "$mode" "${names[@]}"
+  do_install "$CLI" "$SCOPE" "$mode" ${names[@]+"${names[@]}"}
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
