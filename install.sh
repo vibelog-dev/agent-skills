@@ -225,7 +225,7 @@ main() {
   fi
   [ -n "$CLI" ]   || prompt_choice CLI   "CLI?"   claude cursor pi
   [ -n "$SCOPE" ] || prompt_choice SCOPE "Scope?" global project
-  if [ "$ACTION" = install ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
+  if [ "$ACTION" != list ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
     prompt_skills
   fi
 

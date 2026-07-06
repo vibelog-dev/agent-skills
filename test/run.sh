@@ -195,5 +195,19 @@ assert_true "real uninstall removed alpha" grep -q 'alpha: removed' <<<"$real8"
 assert_false "alpha symlink gone after real uninstall" test -L "$home8/.claude/skills/alpha"
 rm -rf "$i8" "$home8"
 
+# Task 9 (Bug 2): bare --uninstall must prompt for skills; --list stays prompt-free
+i9="$(mktemp -d)"; home9="$(mktemp -d)"
+mkdir -p "$i9/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i9/skills/alpha/SKILL.md"
+HOME="$home9" SKILLS_DIR="$i9/skills" bash "$ROOT/install.sh" --cli claude --scope global --all >/dev/null
+# bare --uninstall: prompts CLI (1=claude), scope (1=global), skills (1=alpha)
+uno9="$(printf '1\n1\n1\n' | HOME="$home9" SKILLS_DIR="$i9/skills" bash "$ROOT/install.sh" --uninstall)"
+assert_true "bare uninstall removed a skill" grep -q ': removed' <<<"$uno9"
+assert_false "alpha symlink gone after bare uninstall" test -L "$home9/.claude/skills/alpha"
+# --list must remain non-interactive (no skills prompt) even with stdin closed
+HOME="$home9" SKILLS_DIR="$i9/skills" bash "$ROOT/install.sh" --cli claude --scope global --list < /dev/null >/dev/null 2>&1
+assert_eq "list exits 0 with no stdin" "0" "$?"
+rm -rf "$i9" "$home9"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
