@@ -209,5 +209,15 @@ HOME="$home9" SKILLS_DIR="$i9/skills" bash "$ROOT/install.sh" --cli claude --sco
 assert_eq "list exits 0 with no stdin" "0" "$?"
 rm -rf "$i9" "$home9"
 
+# Task 10: non-TTY stdin uses the numbered fallback (prompt text appears on stderr)
+i10="$(mktemp -d)"; home10="$(mktemp -d)"
+mkdir -p "$i10/skills/alpha" "$i10/skills/beta"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i10/skills/alpha/SKILL.md"
+printf -- '---\nname: beta\ndescription: b\n---\n'  > "$i10/skills/beta/SKILL.md"
+err10="$(printf '1\n1\n1\n' | HOME="$home10" SKILLS_DIR="$i10/skills" bash "$ROOT/install.sh" 2>&1 >/dev/null)"
+assert_true "piped stdin uses numbered fallback" grep -q 'Select the skills to install' <<<"$err10"
+assert_true "numbered fallback still links first skill" test -L "$home10/.claude/skills/alpha"
+rm -rf "$i10" "$home10"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

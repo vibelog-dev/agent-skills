@@ -180,18 +180,76 @@ prompt_choice() {
   printf -v "$var" '%s' "${opts[$((reply-1))]}"
 }
 
-# prompt_skills : sets global array `names` from a numbered multi-select
-prompt_skills() {
+# prompt_skills_numbered : sets global array `names` from a numbered multi-select
+prompt_skills_numbered() {
   local -a all=() ; local n i reply
   while IFS= read -r n; do all+=("$n"); done < <(list_skills)
   for i in "${!all[@]}"; do printf '  %d) %s\n' "$((i+1))" "${all[$i]}" >&2; done
-  printf 'skills (space/comma separated numbers, or "all"): ' >&2; read -r reply
+  printf 'Select the skills to install (numbers separated by space/comma, or "all"): ' >&2; read -r reply
   names=()
   if [ "$reply" = all ]; then names=("${all[@]}"); return; fi
   reply="${reply//,/ }"
   for i in $reply; do
     [ "$i" -ge 1 ] 2>/dev/null && [ "$i" -le "${#all[@]}" ] && names+=("${all[$((i-1))]}")
   done
+}
+
+# prompt_skills_tty : in-place checkbox menu; sets global array `names`
+prompt_skills_tty() {
+  local -a all=() checked=() ; local n i cur=0 key rest
+  while IFS= read -r n; do all+=("$n"); done < <(list_skills)
+  local count="${#all[@]}"
+  [ "$count" -eq 0 ] && { names=(); return; }
+  for i in "${!all[@]}"; do checked[$i]=0; done
+
+  # draw the whole menu (cursor stays after the last line)
+  _draw() {
+    local j mark ptr
+    for j in "${!all[@]}"; do
+      if [ "$j" = "$cur" ]; then ptr='>'; else ptr=' '; fi
+      if [ "${checked[$j]}" = 1 ]; then mark='x'; else mark=' '; fi
+      printf '\033[2K%s [%s] %s\n' "$ptr" "$mark" "${all[$j]}" >&2
+    done
+  }
+
+  printf '\033[?25l' >&2                       # hide cursor
+  trap 'printf "\033[?25h" >&2' INT            # restore cursor on Ctrl-C
+  printf 'Select skills (space to toggle, enter to confirm):\n' >&2
+  _draw
+  while :; do
+    IFS= read -rsn1 key
+    case "$key" in
+      $'\x1b')
+        IFS= read -rsn2 -t 1 rest
+        case "$rest" in
+          '[A') [ "$cur" -gt 0 ] && cur=$((cur-1)) ;;
+          '[B') [ "$cur" -lt $((count-1)) ] && cur=$((cur+1)) ;;
+        esac ;;
+      k) [ "$cur" -gt 0 ] && cur=$((cur-1)) ;;
+      j) [ "$cur" -lt $((count-1)) ] && cur=$((cur+1)) ;;
+      ' ') if [ "${checked[$cur]}" = 1 ]; then checked[$cur]=0; else checked[$cur]=1; fi ;;
+      a)
+        local any=0
+        for i in "${!all[@]}"; do [ "${checked[$i]}" = 1 ] && any=1; done
+        for i in "${!all[@]}"; do [ "$any" = 1 ] && checked[$i]=0 || checked[$i]=1; done ;;
+      '') break ;;   # Enter
+    esac
+    printf '\033[%dA' "$count" >&2             # move cursor up to menu top
+    _draw
+  done
+  trap - INT
+  printf '\033[?25h' >&2                        # restore cursor
+
+  names=()
+  for i in "${!all[@]}"; do
+    [ "${checked[$i]}" = 1 ] && names+=("${all[$i]}")
+  done
+  unset -f _draw
+}
+
+# prompt_skills : dispatch to TTY checkbox menu or numbered fallback
+prompt_skills() {
+  if [ -t 0 ]; then prompt_skills_tty; else prompt_skills_numbered; fi
 }
 
 main() {
@@ -223,8 +281,8 @@ main() {
   elif [ -n "$SKILLS_ARG" ]; then
     IFS=',' read -r -a names <<<"$SKILLS_ARG"
   fi
-  [ -n "$CLI" ]   || prompt_choice CLI   "CLI?"   claude cursor pi
-  [ -n "$SCOPE" ] || prompt_choice SCOPE "Scope?" global project
+  [ -n "$CLI" ]   || prompt_choice CLI   "Select the target CLI:" claude cursor pi
+  [ -n "$SCOPE" ] || prompt_choice SCOPE "Select where to install the skills:" global project
   if [ "$ACTION" != list ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
     prompt_skills
   fi
