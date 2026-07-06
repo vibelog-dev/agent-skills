@@ -17,5 +17,31 @@ help_out="$(bash "$ROOT/install.sh" --help)"
 assert_true "help mentions usage" grep -qi 'usage' <<<"$help_out"
 assert_true "sourcing did not run main (no install output)" test -z "${MAIN_RAN:-}"
 
+# Task 2: discovery — use an isolated fixture skills dir
+fix="$(mktemp -d)"
+mkdir -p "$fix/alpha" "$fix/beta" "$fix/notaskill"
+cat >"$fix/alpha/SKILL.md" <<'EOF'
+---
+name: alpha
+description: Does the alpha thing.
+---
+body
+EOF
+cat >"$fix/beta/SKILL.md" <<'EOF'
+---
+name: beta
+description: Does beta.
+---
+EOF
+# notaskill has no SKILL.md
+( SKILLS_DIR="$fix"; source "$ROOT/install.sh"
+  assert_eq "field name"  "alpha"            "$(skill_field "$fix/alpha" name)"
+  assert_eq "field desc"  "Does the alpha thing." "$(skill_field "$fix/alpha" description)"
+  assert_eq "list skips non-skill" "alpha
+beta" "$(list_skills | sort)"
+  printf '%d %d\n' "$PASS" "$FAIL" > "$fix/counts" )
+read -r sp sf < "$fix/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
+rm -rf "$fix"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

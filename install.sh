@@ -2,6 +2,26 @@
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${SKILLS_DIR:=$SCRIPT_DIR/skills}"
 
+# skill_field <skill_dir> <field> -> prints top-level frontmatter value
+skill_field() {
+  local dir="$1" field="$2"
+  awk -v f="$field" '
+    NR==1 && $0!="---" { exit }
+    NR==1 { next }
+    $0=="---" { exit }
+    $0 ~ "^"f":[ \t]*" { sub("^"f":[ \t]*",""); print; exit }
+  ' "$dir/SKILL.md"
+}
+
+# list_skills -> names of dirs under SKILLS_DIR that contain a SKILL.md
+list_skills() {
+  local d
+  for d in "$SKILLS_DIR"/*/; do
+    [ -f "${d}SKILL.md" ] || continue
+    basename "$d"
+  done
+}
+
 usage() {
   cat <<'EOF'
 Usage: install.sh [options]
