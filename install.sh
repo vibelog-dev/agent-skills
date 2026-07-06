@@ -59,7 +59,17 @@ link_skill() {
       [ "$mode" = dryrun ] && { echo "would-refresh"; return; }
       mkdir -p "$parent"; ln -sfn "$src" "$target"; echo "refreshed" ;;
     foreign)
-      echo "skipped-foreign" ;;
+      case "$mode" in
+        backup)
+          local bak="${target}.bak.$(date +%Y%m%d%H%M%S)"
+          mv "$target" "$bak"; ln -s "$src" "$target"; echo "backed-up:$bak" ;;
+        force)
+          rm "$target"; ln -s "$src" "$target"; echo "forced" ;;
+        dryrun)
+          echo "would-skip-foreign" ;;
+        *)
+          echo "skipped-foreign" ;;
+      esac ;;
     real)
       case "$mode" in
         backup)

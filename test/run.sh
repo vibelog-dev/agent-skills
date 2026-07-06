@@ -103,6 +103,27 @@ ls_dir="$(mktemp -d)"
   assert_eq "dryrun absent" "would-link" "$(link_skill "$src" "$t6" dryrun)"
   assert_false "f not created" test -e "$t6"
 
+  # foreign symlink force -> forced, replaced with link to src
+  t7="$tdir/g"; ln -s "$ls_dir/somewhere-else" "$t7"
+  assert_eq "foreign force->forced" "forced" "$(link_skill "$src" "$t7" force)"
+  assert_true "g now symlink" test -L "$t7"
+  assert_eq "g points at src" "$src" "$(readlink "$t7")"
+
+  # foreign symlink backup -> backed-up:<path>, old link preserved as backup, target relinked
+  t8="$tdir/h"; ln -s "$ls_dir/somewhere-else" "$t8"
+  out="$(link_skill "$src" "$t8" backup)"
+  assert_true "foreign backup prefix" grep -q '^backed-up:' <<<"$out"
+  bak="${out#backed-up:}"
+  assert_true "foreign backup is symlink" test -L "$bak"
+  assert_eq "foreign backup points at old dest" "$ls_dir/somewhere-else" "$(readlink "$bak")"
+  assert_true "h now symlink" test -L "$t8"
+  assert_eq "h points at src" "$src" "$(readlink "$t8")"
+
+  # foreign symlink dryrun -> would-skip-foreign, untouched
+  t9="$tdir/i"; ln -s "$ls_dir/somewhere-else" "$t9"
+  assert_eq "foreign dryrun" "would-skip-foreign" "$(link_skill "$src" "$t9" dryrun)"
+  assert_eq "i untouched" "$ls_dir/somewhere-else" "$(readlink "$t9")"
+
   printf '%d %d\n' "$PASS" "$FAIL" > "$ls_dir/counts" )
 read -r sp sf < "$ls_dir/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
 rm -rf "$ls_dir"
