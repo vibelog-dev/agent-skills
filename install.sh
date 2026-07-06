@@ -97,10 +97,62 @@ Bare invocation is interactive: pick CLI, scope, then skills.
 EOF
 }
 
+# resolve_mode -> default|backup|force|dryrun from flag vars
+resolve_mode() {
+  if [ "${DRYRUN:-0}" = 1 ]; then echo dryrun
+  elif [ "${FORCE:-0}" = 1 ]; then echo force
+  elif [ "${BACKUP:-0}" = 1 ]; then echo backup
+  else echo default; fi
+}
+
+# do_install <cli> <scope> <mode> <name...>
+do_install() {
+  local cli="$1" scope="$2" mode="$3"; shift 3
+  local name src target action
+  for name in "$@"; do
+    src="$SKILLS_DIR/$name"
+    if [ ! -f "$src/SKILL.md" ]; then
+      printf '%s: skipped-missing\n' "$name"; continue
+    fi
+    target="$(target_path "$cli" "$scope" "$name")" || {
+      printf '%s: bad-target\n' "$name"; continue; }
+    action="$(link_skill "$src" "$target" "$mode")"
+    printf '%s: %s\n' "$name" "$action"
+  done
+}
+
 main() {
   set -euo pipefail
   MAIN_RAN=1
-  usage
+  local CLI="" SCOPE="" SKILLS_ARG="" ALL=0 ACTION=install
+  DRYRUN=0 BACKUP=0 FORCE=0 YES=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --cli) CLI="$2"; shift 2 ;;
+      --scope) SCOPE="$2"; shift 2 ;;
+      --skills) SKILLS_ARG="$2"; shift 2 ;;
+      --all) ALL=1; shift ;;
+      --dry-run) DRYRUN=1; shift ;;
+      --backup) BACKUP=1; shift ;;
+      --force) FORCE=1; shift ;;
+      --yes|-y) YES=1; shift ;;
+      --list) ACTION=list; shift ;;
+      --uninstall) ACTION=uninstall; shift ;;
+      -h|--help) usage; return 0 ;;
+      *) printf 'unknown option: %s\n' "$1" >&2; usage; return 2 ;;
+    esac
+  done
+
+  # selected skill names
+  local -a names=()
+  if [ "$ALL" = 1 ]; then
+    while IFS= read -r n; do names+=("$n"); done < <(list_skills)
+  elif [ -n "$SKILLS_ARG" ]; then
+    IFS=',' read -r -a names <<<"$SKILLS_ARG"
+  fi
+
+  local mode; mode="$(resolve_mode)"
+  do_install "$CLI" "$SCOPE" "$mode" "${names[@]}"
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then

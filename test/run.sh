@@ -107,5 +107,27 @@ ls_dir="$(mktemp -d)"
 read -r sp sf < "$ls_dir/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
 rm -rf "$ls_dir"
 
+# Task 5: non-interactive install via CLI flags
+i5="$(mktemp -d)"
+mkdir -p "$i5/skills/alpha" "$i5/skills/beta"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i5/skills/alpha/SKILL.md"
+printf -- '---\nname: beta\ndescription: b\n---\n'  > "$i5/skills/beta/SKILL.md"
+home5="$(mktemp -d)"
+# non-interactive: install alpha only, claude global
+out="$(HOME="$home5" SKILLS_DIR="$i5/skills" bash "$ROOT/install.sh" \
+        --cli claude --scope global --skills alpha)"
+assert_true "reports alpha linked" grep -q 'alpha: linked' <<<"$out"
+assert_true "alpha symlink exists" test -L "$home5/.claude/skills/alpha"
+assert_false "beta not installed" test -e "$home5/.claude/skills/beta"
+assert_eq "alpha -> repo src" "$i5/skills/alpha" "$(readlink "$home5/.claude/skills/alpha")"
+
+# --all installs both; --dry-run changes nothing
+home5b="$(mktemp -d)"
+out2="$(HOME="$home5b" SKILLS_DIR="$i5/skills" bash "$ROOT/install.sh" \
+         --cli pi --scope global --all --dry-run)"
+assert_true "dry-run says would-link alpha" grep -q 'alpha: would-link' <<<"$out2"
+assert_false "dry-run created nothing" test -e "$home5b/.pi/agent/skills/alpha"
+rm -rf "$i5" "$home5" "$home5b"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
