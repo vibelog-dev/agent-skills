@@ -141,5 +141,24 @@ assert_true "alpha symlink exists" test -L "$home6/.claude/skills/alpha"
 assert_false "beta not selected" test -e "$home6/.claude/skills/beta"
 rm -rf "$i6" "$home6"
 
+# Task 7: list + uninstall
+i7="$(mktemp -d)"; home7="$(mktemp -d)"
+mkdir -p "$i7/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i7/skills/alpha/SKILL.md"
+# install then list
+HOME="$home7" SKILLS_DIR="$i7/skills" bash "$ROOT/install.sh" --cli claude --scope global --all >/dev/null
+lst="$(HOME="$home7" SKILLS_DIR="$i7/skills" bash "$ROOT/install.sh" --cli claude --scope global --list)"
+assert_true "list shows alpha linked" grep -q 'alpha: linked' <<<"$lst"
+# uninstall removes our symlink only
+uno="$(HOME="$home7" SKILLS_DIR="$i7/skills" bash "$ROOT/install.sh" --cli claude --scope global --all --uninstall)"
+assert_true "uninstall removed alpha" grep -q 'alpha: removed' <<<"$uno"
+assert_false "alpha symlink gone" test -L "$home7/.claude/skills/alpha"
+# uninstall refuses a real dir
+mkdir -p "$home7/.claude/skills/alpha"
+uno2="$(HOME="$home7" SKILLS_DIR="$i7/skills" bash "$ROOT/install.sh" --cli claude --scope global --all --uninstall)"
+assert_true "uninstall skips real dir" grep -q 'alpha: skipped-real' <<<"$uno2"
+assert_true "real dir still there" test -d "$home7/.claude/skills/alpha"
+rm -rf "$i7" "$home7"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

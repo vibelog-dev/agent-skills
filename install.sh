@@ -121,6 +121,42 @@ do_install() {
   done
 }
 
+# remove_link <target> : delete only if symlink pointing under SKILLS_DIR
+remove_link() {
+  local target="$1"
+  if [ -L "$target" ]; then
+    case "$(readlink "$target")" in
+      "$SKILLS_DIR"/*) rm "$target"; echo "removed"; return ;;
+      *) echo "skipped-foreign"; return ;;
+    esac
+  fi
+  [ -e "$target" ] && { echo "skipped-real"; return; }
+  echo "absent"
+}
+
+# do_list <cli> <scope> : show every discoverable skill's link status
+do_list() {
+  local cli="$1" scope="$2" name target
+  while IFS= read -r name; do
+    target="$(target_path "$cli" "$scope" "$name")" || continue
+    if [ "$(link_state "$target" "$SKILLS_DIR/$name")" = ours ]; then
+      printf '%s: linked\n' "$name"
+    else
+      printf '%s: -\n' "$name"
+    fi
+  done < <(list_skills)
+}
+
+# do_uninstall <cli> <scope> <name...>
+do_uninstall() {
+  local cli="$1" scope="$2"; shift 2
+  local name target
+  for name in "$@"; do
+    target="$(target_path "$cli" "$scope" "$name")" || continue
+    printf '%s: %s\n' "$name" "$(remove_link "$target")"
+  done
+}
+
 # prompt_choice <varname> <prompt> <option...> : numbered single choice
 prompt_choice() {
   local var="$1" prompt="$2"; shift 2
@@ -176,12 +212,16 @@ main() {
   fi
   [ -n "$CLI" ]   || prompt_choice CLI   "CLI?"   claude cursor pi
   [ -n "$SCOPE" ] || prompt_choice SCOPE "Scope?" global project
-  if [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
+  if [ "$ACTION" = install ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
     prompt_skills
   fi
 
   local mode; mode="$(resolve_mode)"
-  do_install "$CLI" "$SCOPE" "$mode" ${names[@]+"${names[@]}"}
+  case "$ACTION" in
+    list)      do_list "$CLI" "$SCOPE" ;;
+    uninstall) do_uninstall "$CLI" "$SCOPE" ${names[@]+"${names[@]}"} ;;
+    *)         do_install "$CLI" "$SCOPE" "$mode" ${names[@]+"${names[@]}"} ;;
+  esac
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
