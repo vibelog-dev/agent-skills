@@ -43,5 +43,19 @@ beta" "$(list_skills | sort)"
 read -r sp sf < "$fix/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
 rm -rf "$fix"
 
+# Task 3: target_path (override HOME + cd so paths are deterministic)
+th="$(mktemp -d)"; tp="$(mktemp -d)"
+( HOME="$th"; cd "$tp"; source "$ROOT/install.sh"
+  assert_eq "claude global" "$th/.claude/skills/x"    "$(target_path claude global x)"
+  assert_eq "claude project" "$tp/.claude/skills/x"   "$(target_path claude project x)"
+  assert_eq "pi global"      "$th/.pi/agent/skills/x" "$(target_path pi global x)"
+  assert_eq "pi project"     "$tp/.pi/skills/x"       "$(target_path pi project x)"
+  assert_eq "cursor global"  "$th/.cursor/skills/x"   "$(target_path cursor global x)"
+  assert_eq "cursor project" "$tp/.cursor/skills/x"   "$(target_path cursor project x)"
+  assert_false "unknown pair returns nonzero" target_path bogus global x
+  printf '%d %d\n' "$PASS" "$FAIL" > "$th/counts" )
+read -r sp sf < "$th/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
+rm -rf "$th" "$tp"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

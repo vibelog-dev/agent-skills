@@ -22,6 +22,20 @@ list_skills() {
   done
 }
 
+# target_path <cli> <scope> <name> -> absolute symlink target
+target_path() {
+  local cli="$1" scope="$2" name="$3"
+  case "$cli:$scope" in
+    claude:global)  printf '%s/.claude/skills/%s\n'   "$HOME" "$name" ;;
+    claude:project) printf '%s/.claude/skills/%s\n'   "$PWD"  "$name" ;;
+    pi:global)      printf '%s/.pi/agent/skills/%s\n' "$HOME" "$name" ;;
+    pi:project)     printf '%s/.pi/skills/%s\n'       "$PWD"  "$name" ;;
+    cursor:global)  printf '%s/.cursor/skills/%s\n'   "$HOME" "$name" ;;
+    cursor:project) printf '%s/.cursor/skills/%s\n'   "$PWD"  "$name" ;;
+    *) return 1 ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: install.sh [options]
