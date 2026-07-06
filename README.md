@@ -34,7 +34,7 @@ A skill is a directory containing a `SKILL.md` with YAML frontmatter
 
 ```bash
 ./install.sh                       # interactive: pick CLI, scope, skills
-./install.sh --cli claude --all    # non-interactive
+./install.sh --cli claude --scope global --all    # non-interactive
 ./install.sh --dry-run             # show what would happen, change nothing
 ./install.sh --list                # show currently-linked skills
 ./install.sh --uninstall           # remove only symlinks pointing at this repo
