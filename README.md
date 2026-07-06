@@ -6,8 +6,6 @@ installable into any supported coding-agent CLI with `install.sh`.
 
 Currently supported CLIs: **Claude Code**, **Cursor**, **PI**.
 
-> Status: installer in development. This README describes the intended interface.
-
 ## Install
 
 ```bash
