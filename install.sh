@@ -36,6 +36,45 @@ target_path() {
   esac
 }
 
+# link_state <target> <src> -> absent|ours|foreign|real
+link_state() {
+  local target="$1" src="$2"
+  if [ -L "$target" ]; then
+    if [ "$(readlink "$target")" = "$src" ]; then echo ours; else echo foreign; fi
+    return
+  fi
+  if [ -e "$target" ]; then echo real; return; fi
+  echo absent
+}
+
+# link_skill <src> <target> <mode> ; mode: default|backup|force|dryrun
+link_skill() {
+  local src="$1" target="$2" mode="$3"
+  local parent; parent="$(dirname "$target")"
+  case "$(link_state "$target" "$src")" in
+    absent)
+      [ "$mode" = dryrun ] && { echo "would-link"; return; }
+      mkdir -p "$parent"; ln -s "$src" "$target"; echo "linked" ;;
+    ours)
+      [ "$mode" = dryrun ] && { echo "would-refresh"; return; }
+      mkdir -p "$parent"; ln -sfn "$src" "$target"; echo "refreshed" ;;
+    foreign)
+      echo "skipped-foreign" ;;
+    real)
+      case "$mode" in
+        backup)
+          local bak="${target}.bak.$(date +%Y%m%d%H%M%S)"
+          mv "$target" "$bak"; ln -s "$src" "$target"; echo "backed-up:$bak" ;;
+        force)
+          rm -rf "$target"; ln -s "$src" "$target"; echo "forced" ;;
+        dryrun)
+          echo "would-skip-real" ;;
+        *)
+          echo "skipped-real" ;;
+      esac ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: install.sh [options]

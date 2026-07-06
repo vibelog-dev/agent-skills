@@ -57,5 +57,55 @@ th="$(mktemp -d)"; tp="$(mktemp -d)"
 read -r sp sf < "$th/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
 rm -rf "$th" "$tp"
 
+# Task 4: link state-machine
+ls_dir="$(mktemp -d)"
+( source "$ROOT/install.sh"
+  src="$ls_dir/repo/alpha"; mkdir -p "$src"
+  tdir="$ls_dir/targets"; mkdir -p "$tdir"
+
+  # absent -> linked, and it is a symlink to src
+  t="$tdir/a"
+  assert_eq "absent->linked" "linked" "$(link_skill "$src" "$t" default)"
+  assert_true "a is symlink" test -L "$t"
+  assert_eq "a points at src" "$src" "$(readlink "$t")"
+
+  # ours -> refreshed (idempotent)
+  assert_eq "ours->refreshed" "refreshed" "$(link_skill "$src" "$t" default)"
+  assert_true "a still symlink" test -L "$t"
+
+  # foreign symlink -> skipped, untouched
+  t2="$tdir/b"; ln -s "$ls_dir/somewhere-else" "$t2"
+  assert_eq "foreign->skip" "skipped-foreign" "$(link_skill "$src" "$t2" default)"
+  assert_eq "b untouched" "$ls_dir/somewhere-else" "$(readlink "$t2")"
+
+  # real dir default -> skipped, dir intact
+  t3="$tdir/c"; mkdir -p "$t3"; touch "$t3/keep"
+  assert_eq "real default->skip" "skipped-real" "$(link_skill "$src" "$t3" default)"
+  assert_true "c still real dir" test -d "$t3"
+  assert_true "c contents intact" test -f "$t3/keep"
+
+  # real dir backup -> backed-up:<path>, original moved, symlink created
+  t4="$tdir/d"; mkdir -p "$t4"; touch "$t4/keep"
+  out="$(link_skill "$src" "$t4" backup)"
+  assert_true "backup action prefix" grep -q '^backed-up:' <<<"$out"
+  bak="${out#backed-up:}"
+  assert_true "backup dir exists" test -f "$bak/keep"
+  assert_true "d now symlink" test -L "$t4"
+  assert_eq "d points at src" "$src" "$(readlink "$t4")"
+
+  # real dir force -> forced, replaced, no backup
+  t5="$tdir/e"; mkdir -p "$t5"; touch "$t5/keep"
+  assert_eq "force->forced" "forced" "$(link_skill "$src" "$t5" force)"
+  assert_true "e now symlink" test -L "$t5"
+
+  # dryrun -> would-*, nothing created
+  t6="$tdir/f"
+  assert_eq "dryrun absent" "would-link" "$(link_skill "$src" "$t6" dryrun)"
+  assert_false "f not created" test -e "$t6"
+
+  printf '%d %d\n' "$PASS" "$FAIL" > "$ls_dir/counts" )
+read -r sp sf < "$ls_dir/counts"; PASS=$((PASS+sp)); FAIL=$((FAIL+sf))
+rm -rf "$ls_dir"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
