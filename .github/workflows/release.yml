@@ -1,0 +1,39 @@
+name: release
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  release:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute next version and create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          bump=$(printf '%s' "$LABELS" | grep -oE 'release:(patch|minor|major)' | head -1 | cut -d: -f2)
+          if [ -z "$bump" ]; then
+            echo "No release:* label; skipping release."
+            exit 0
+          fi
+          latest=$(git tag -l 'v*.*.*' --sort=-v:refname | head -1)
+          latest=${latest:-v0.0.0}
+          ver=${latest#v}
+          major=$(echo "$ver" | cut -d. -f1)
+          minor=$(echo "$ver" | cut -d. -f2)
+          patch=$(echo "$ver" | cut -d. -f3)
+          case "$bump" in
+            major) major=$((major+1)); minor=0; patch=0 ;;
+            minor) minor=$((minor+1)); patch=0 ;;
+            patch) patch=$((patch+1)) ;;
+          esac
+          next="v${major}.${minor}.${patch}"
+          echo "Previous: $latest  Bump: $bump  Next: $next"
+          gh release create "$next" --target main --title "$next" --generate-notes

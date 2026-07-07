@@ -1,0 +1,19 @@
+name: release-gate
+on:
+  pull_request:
+    types: [opened, labeled, unlabeled, synchronize]
+    branches: [main]
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require exactly one release label
+        env:
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        run: |
+          count=$(printf '%s' "$LABELS" | grep -oE 'release:(patch|minor|major)' | wc -l | tr -d ' ')
+          echo "release:* labels found: $count"
+          if [ "$count" -ne 1 ]; then
+            echo "::error::PR must have exactly one label: release:patch, release:minor, or release:major"
+            exit 1
+          fi
