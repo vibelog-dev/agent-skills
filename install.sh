@@ -61,7 +61,7 @@ link_skill() {
     foreign)
       case "$mode" in
         backup)
-          local bak="${target}.bak.$(date +%Y%m%d%H%M%S)"
+          local bak="${target}.bak.$(date +%Y%m%d%H%M%S).$$"
           mv "$target" "$bak"; ln -s "$src" "$target"; echo "backed-up:$bak" ;;
         force)
           rm "$target"; ln -s "$src" "$target"; echo "forced" ;;
@@ -73,7 +73,7 @@ link_skill() {
     real)
       case "$mode" in
         backup)
-          local bak="${target}.bak.$(date +%Y%m%d%H%M%S)"
+          local bak="${target}.bak.$(date +%Y%m%d%H%M%S).$$"
           mv "$target" "$bak"; ln -s "$src" "$target"; echo "backed-up:$bak" ;;
         force)
           rm -rf "$target"; ln -s "$src" "$target"; echo "forced" ;;
@@ -173,11 +173,16 @@ do_uninstall() {
 # prompt_choice <varname> <prompt> <option...> : numbered single choice
 prompt_choice() {
   local var="$1" prompt="$2"; shift 2
-  local -a opts=("$@") i reply
-  for i in "${!opts[@]}"; do printf '  %d) %s\n' "$((i+1))" "${opts[$i]}" >&2; done
-  printf '%s ' "$prompt" >&2; read -r reply
-  [ "$reply" -ge 1 ] 2>/dev/null && [ "$reply" -le "${#opts[@]}" ] || { echo "invalid choice" >&2; return 1; }
-  printf -v "$var" '%s' "${opts[$((reply-1))]}"
+  local -a opts=("$@"); local i reply
+  while :; do
+    for i in "${!opts[@]}"; do printf '  %d) %s\n' "$((i+1))" "${opts[$i]}" >&2; done
+    printf '%s ' "$prompt" >&2
+    read -r reply || { echo "no input; aborting" >&2; exit 1; }
+    if [ "$reply" -ge 1 ] 2>/dev/null && [ "$reply" -le "${#opts[@]}" ]; then
+      printf -v "$var" '%s' "${opts[$((reply-1))]}"; return 0
+    fi
+    echo "invalid choice" >&2
+  done
 }
 
 # prompt_skills_numbered : sets global array `names` from a numbered multi-select
@@ -185,7 +190,8 @@ prompt_skills_numbered() {
   local -a all=() ; local n i reply
   while IFS= read -r n; do all+=("$n"); done < <(list_skills)
   for i in "${!all[@]}"; do printf '  %d) %s\n' "$((i+1))" "${all[$i]}" >&2; done
-  printf 'Select the skills to install (numbers separated by space/comma, or "all"): ' >&2; read -r reply
+  printf 'Select the skills to install (numbers separated by space/comma, or "all"): ' >&2
+  read -r reply || { echo "no input; aborting" >&2; exit 1; }
   names=()
   if [ "$reply" = all ]; then names=("${all[@]}"); return; fi
   reply="${reply//,/ }"
@@ -213,11 +219,13 @@ prompt_skills_tty() {
   }
 
   printf '\033[?25l' >&2                       # hide cursor
-  trap 'printf "\033[?25h" >&2' INT            # restore cursor on Ctrl-C
+  # exit in the trap: bash <4.4 restarts read after a non-exiting trap,
+  # which would make the menu impossible to cancel
+  trap 'printf "\033[?25h" >&2; exit 130' INT  # restore cursor on Ctrl-C
   printf 'Select skills (space to toggle, enter to confirm):\n' >&2
   _draw
   while :; do
-    IFS= read -rsn1 key
+    IFS= read -rsn1 key || { printf '\033[?25h' >&2; echo "no input; aborting" >&2; exit 1; }
     case "$key" in
       $'\x1b')
         IFS= read -rsn2 -t 1 rest
@@ -274,6 +282,20 @@ main() {
     esac
   done
 
+  # validate provided cli/scope up front
+  if [ -n "$CLI" ]; then
+    case "$CLI" in
+      claude|cursor|pi) ;;
+      *) printf 'invalid --cli: %s\n' "$CLI" >&2; usage; return 2 ;;
+    esac
+  fi
+  if [ -n "$SCOPE" ]; then
+    case "$SCOPE" in
+      global|project) ;;
+      *) printf 'invalid --scope: %s\n' "$SCOPE" >&2; usage; return 2 ;;
+    esac
+  fi
+
   # selected skill names
   local -a names=()
   if [ "$ALL" = 1 ]; then
@@ -285,6 +307,10 @@ main() {
   [ -n "$SCOPE" ] || prompt_choice SCOPE "Select where to install the skills:" global project
   if [ "$ACTION" != list ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
     prompt_skills
+  fi
+
+  if [ "$ACTION" != list ] && [ "${#names[@]}" -eq 0 ]; then
+    echo "no skills selected" >&2; return 1
   fi
 
   local mode; mode="$(resolve_mode)"

@@ -219,5 +219,46 @@ assert_true "piped stdin uses numbered fallback" grep -q 'Select the skills to i
 assert_true "numbered fallback still links first skill" test -L "$home10/.claude/skills/alpha"
 rm -rf "$i10" "$home10"
 
+# Task 11: interactive invalid choice re-prompts instead of aborting
+i11="$(mktemp -d)"; home11="$(mktemp -d)"
+mkdir -p "$i11/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i11/skills/alpha/SKILL.md"
+# 'banana' is invalid at the CLI prompt -> re-prompt; then 1=claude, 1=global, 1=alpha
+rec="$(printf 'banana\n1\n1\n1\n' | HOME="$home11" SKILLS_DIR="$i11/skills" bash "$ROOT/install.sh" 2>/dev/null)"; rc=$?
+assert_eq "invalid choice recovers (exit 0)" "0" "$rc"
+assert_true "recovered run links alpha" grep -q 'alpha: linked' <<<"$rec"
+assert_true "alpha symlink exists after recovery" test -L "$home11/.claude/skills/alpha"
+rm -rf "$i11" "$home11"
+
+# Task 12: EOF on stdin -> controlled abort (nonzero exit + message)
+eoferr="$(bash "$ROOT/install.sh" < /dev/null 2>&1)"; rc=$?
+assert_true "EOF exits nonzero" test "$rc" -ne 0
+assert_true "EOF prints abort message" grep -q 'no input; aborting' <<<"$eoferr"
+
+# Task 13: bad --cli -> exit 2, names the value, no bad-target on stdout
+errf="$(mktemp)"
+outcli="$(bash "$ROOT/install.sh" --cli foo --scope global --all 2>"$errf")"; rc=$?
+assert_eq "bad --cli exits 2" "2" "$rc"
+assert_true "bad --cli mentions foo" grep -q 'foo' "$errf"
+assert_false "bad --cli no bad-target on stdout" grep -q 'bad-target' <<<"$outcli"
+rm -f "$errf"
+
+# Task 14: bad --scope -> exit 2, names the value
+errf="$(mktemp)"
+bash "$ROOT/install.sh" --cli claude --scope bar --all >/dev/null 2>"$errf"; rc=$?
+assert_eq "bad --scope exits 2" "2" "$rc"
+assert_true "bad --scope mentions bar" grep -q 'bar' "$errf"
+rm -f "$errf"
+
+# Task 15: empty skill selection -> nonzero exit + message
+i15="$(mktemp -d)"; home15="$(mktemp -d)"
+mkdir -p "$i15/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i15/skills/alpha/SKILL.md"
+errf="$(mktemp)"
+printf '1\n1\n\n' | HOME="$home15" SKILLS_DIR="$i15/skills" bash "$ROOT/install.sh" >/dev/null 2>"$errf"; rc=$?
+assert_true "empty selection exits nonzero" test "$rc" -ne 0
+assert_true "empty selection message" grep -q 'no skills selected' "$errf"
+rm -f "$errf"; rm -rf "$i15" "$home15"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
