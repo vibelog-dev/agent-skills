@@ -29,6 +29,7 @@ A skill is a directory containing a `SKILL.md` with YAML frontmatter
 | Skill | Description |
 |-------|-------------|
 | `senior-specifier` | Turns vague engineering requests into an evidence-backed Senior Engineering Task Brief before an implementation plan is written. |
+| `docs-check` | Pre-merge documentation freshness gate — docs must pass an executable checklist, not merely exist. |
 
 ## Usage
 
