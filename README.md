@@ -35,6 +35,7 @@ A skill is a directory containing a `SKILL.md` with YAML frontmatter
 ```bash
 ./install.sh                       # interactive: pick CLI, scope, skills
 ./install.sh --cli claude --scope global --all    # non-interactive
+./install.sh --cli claude --project-path ~/my-repo --all   # project scope, custom path
 ./install.sh --dry-run             # show what would happen, change nothing
 ./install.sh --list                # show currently-linked skills
 ./install.sh --uninstall           # remove only symlinks pointing at this repo
@@ -44,9 +45,12 @@ Skills install as **symlinks** into each CLI's skills directory:
 
 | CLI | global | project |
 |-----|--------|---------|
-| claude | `~/.claude/skills/<name>` | `.claude/skills/<name>` |
-| pi | `~/.pi/agent/skills/<name>` | `.pi/skills/<name>` |
-| cursor | `~/.cursor/skills/<name>` | `.cursor/skills/<name>` |
+| claude | `~/.claude/skills/<name>` | `<project>/.claude/skills/<name>` |
+| pi | `~/.pi/agent/skills/<name>` | `<project>/.pi/skills/<name>` |
+| cursor | `~/.cursor/skills/<name>` | `<project>/.cursor/skills/<name>` |
+
+For project scope, `<project>` is the current directory by default, or the
+directory you pass to `--project-path` (interactively, you're prompted for it).
 
 The installer is non-destructive: it never overwrites a real directory or a
 symlink it does not own without an explicit `--backup` or `--force`.

@@ -27,11 +27,11 @@ target_path() {
   local cli="$1" scope="$2" name="$3"
   case "$cli:$scope" in
     claude:global)  printf '%s/.claude/skills/%s\n'   "$HOME" "$name" ;;
-    claude:project) printf '%s/.claude/skills/%s\n'   "$PWD"  "$name" ;;
+    claude:project) printf '%s/.claude/skills/%s\n'   "${PROJECT_DIR:-$PWD}" "$name" ;;
     pi:global)      printf '%s/.pi/agent/skills/%s\n' "$HOME" "$name" ;;
-    pi:project)     printf '%s/.pi/skills/%s\n'       "$PWD"  "$name" ;;
+    pi:project)     printf '%s/.pi/skills/%s\n'       "${PROJECT_DIR:-$PWD}" "$name" ;;
     cursor:global)  printf '%s/.cursor/skills/%s\n'   "$HOME" "$name" ;;
-    cursor:project) printf '%s/.cursor/skills/%s\n'   "$PWD"  "$name" ;;
+    cursor:project) printf '%s/.cursor/skills/%s\n'   "${PROJECT_DIR:-$PWD}" "$name" ;;
     *) return 1 ;;
   esac
 }
@@ -93,6 +93,7 @@ Install SKILL.md skills into a coding-agent CLI as symlinks.
 
   --cli <claude|cursor|pi>   target CLI
   --scope <global|project>   install location
+  --project-path <dir>       project dir for project scope (default: cwd)
   --skills <a,b,c>           comma-separated skill names
   --all                      select every discoverable skill
   --dry-run                  show planned actions, change nothing
@@ -185,6 +186,19 @@ prompt_choice() {
   done
 }
 
+# prompt_path <varname> <prompt> <default> : read an existing dir, empty -> default
+prompt_path() {
+  local var="$1" prompt="$2" def="$3" reply
+  while :; do
+    printf '%s [%s]: ' "$prompt" "$def" >&2
+    read -r reply || { echo "no input; aborting" >&2; exit 1; }
+    [ -n "$reply" ] || reply="$def"
+    case "$reply" in "~") reply="$HOME" ;; "~/"*) reply="$HOME/${reply#\~/}" ;; esac
+    if [ -d "$reply" ]; then printf -v "$var" '%s' "$reply"; return 0; fi
+    printf 'not a directory: %s\n' "$reply" >&2
+  done
+}
+
 # prompt_skills_numbered : sets global array `names` from a numbered multi-select
 prompt_skills_numbered() {
   local -a all=() ; local n i reply
@@ -263,12 +277,13 @@ prompt_skills() {
 main() {
   set -euo pipefail
   MAIN_RAN=1
-  local CLI="" SCOPE="" SKILLS_ARG="" ALL=0 ACTION=install
+  local CLI="" SCOPE="" PROJECT_DIR="" SKILLS_ARG="" ALL=0 ACTION=install
   DRYRUN=0 BACKUP=0 FORCE=0 YES=0
   while [ $# -gt 0 ]; do
     case "$1" in
       --cli) CLI="$2"; shift 2 ;;
       --scope) SCOPE="$2"; shift 2 ;;
+      --project-path) PROJECT_DIR="$2"; shift 2 ;;
       --skills) SKILLS_ARG="$2"; shift 2 ;;
       --all) ALL=1; shift ;;
       --dry-run) DRYRUN=1; shift ;;
@@ -281,6 +296,13 @@ main() {
       *) printf 'unknown option: %s\n' "$1" >&2; usage; return 2 ;;
     esac
   done
+
+  # --project-path implies project scope and must be an existing dir
+  if [ -n "$PROJECT_DIR" ]; then
+    [ -n "$SCOPE" ] || SCOPE=project
+    [ "$SCOPE" = project ] || { printf -- '--project-path requires project scope\n' >&2; return 2; }
+    [ -d "$PROJECT_DIR" ] || { printf 'invalid --project-path: %s\n' "$PROJECT_DIR" >&2; return 2; }
+  fi
 
   # validate provided cli/scope up front
   if [ -n "$CLI" ]; then
@@ -303,8 +325,13 @@ main() {
   elif [ -n "$SKILLS_ARG" ]; then
     IFS=',' read -r -a names <<<"$SKILLS_ARG"
   fi
-  [ -n "$CLI" ]   || prompt_choice CLI   "Select the target CLI:" claude cursor pi
-  [ -n "$SCOPE" ] || prompt_choice SCOPE "Select where to install the skills:" global project
+  [ -n "$CLI" ] || prompt_choice CLI "Select the target CLI:" claude cursor pi
+  if [ -z "$SCOPE" ]; then
+    prompt_choice SCOPE "Select where to install the skills:" global project
+    if [ "$SCOPE" = project ] && [ -z "$PROJECT_DIR" ]; then
+      prompt_path PROJECT_DIR "Project path" "$PWD"
+    fi
+  fi
   if [ "$ACTION" != list ] && [ "$ALL" != 1 ] && [ -z "$SKILLS_ARG" ] && [ "${#names[@]}" -eq 0 ]; then
     prompt_skills
   fi

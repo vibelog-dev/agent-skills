@@ -260,5 +260,49 @@ assert_true "empty selection exits nonzero" test "$rc" -ne 0
 assert_true "empty selection message" grep -q 'no skills selected' "$errf"
 rm -f "$errf"; rm -rf "$i15" "$home15"
 
+# Task 16: --project-path installs into the given dir and implies project scope
+i16="$(mktemp -d)"; proj16="$(mktemp -d)"
+mkdir -p "$i16/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i16/skills/alpha/SKILL.md"
+out16="$(SKILLS_DIR="$i16/skills" bash "$ROOT/install.sh" --cli claude --project-path "$proj16" --all)"
+assert_true "project-path linked alpha" grep -q 'alpha: linked' <<<"$out16"
+assert_true "symlink under project-path" test -L "$proj16/.claude/skills/alpha"
+assert_eq "project-path link src" "$i16/skills/alpha" "$(readlink "$proj16/.claude/skills/alpha")"
+rm -rf "$i16" "$proj16"
+
+# Task 17: nonexistent --project-path -> exit 2
+errf="$(mktemp)"
+bash "$ROOT/install.sh" --cli claude --project-path /no/such/dir/xyz --all >/dev/null 2>"$errf"; rc=$?
+assert_eq "bad project-path exits 2" "2" "$rc"
+assert_true "bad project-path message" grep -q 'invalid --project-path' "$errf"
+rm -f "$errf"
+
+# Task 18: --project-path with --scope global is rejected
+errf="$(mktemp)"
+bash "$ROOT/install.sh" --cli claude --scope global --project-path "$ROOT" --all >/dev/null 2>"$errf"; rc=$?
+assert_eq "project-path+global exits 2" "2" "$rc"
+assert_true "project-path+global message" grep -q 'requires project scope' "$errf"
+rm -f "$errf"
+
+# Task 19: interactive scope=project prompts for a path
+i19="$(mktemp -d)"; proj19="$(mktemp -d)"
+mkdir -p "$i19/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i19/skills/alpha/SKILL.md"
+# CLI=1(claude), scope=2(project), path=$proj19, skills=1(alpha)
+out19="$(printf '1\n2\n%s\n1\n' "$proj19" | SKILLS_DIR="$i19/skills" bash "$ROOT/install.sh" 2>/dev/null)"
+assert_true "interactive project-path linked" grep -q 'alpha: linked' <<<"$out19"
+assert_true "interactive symlink under path" test -L "$proj19/.claude/skills/alpha"
+rm -rf "$i19" "$proj19"
+
+# Task 20: interactive project path re-prompts on a nonexistent dir
+i20="$(mktemp -d)"; proj20="$(mktemp -d)"
+mkdir -p "$i20/skills/alpha"
+printf -- '---\nname: alpha\ndescription: a\n---\n' > "$i20/skills/alpha/SKILL.md"
+# path line 1 is bogus (re-prompt), line 2 is the real dir
+err20="$(printf '1\n2\n/no/such/xyz\n%s\n1\n' "$proj20" | SKILLS_DIR="$i20/skills" bash "$ROOT/install.sh" 2>&1 >/dev/null)"
+assert_true "bad path re-prompts" grep -q 'not a directory' <<<"$err20"
+assert_true "recovered link exists" test -L "$proj20/.claude/skills/alpha"
+rm -rf "$i20" "$proj20"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
