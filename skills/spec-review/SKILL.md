@@ -1,27 +1,27 @@
 ---
-name: senior-specifier
+name: spec-review
 description: Use when an engineering request is vague or underspecified ("make it secure", "apply encryption properly", "add validation", "improve architecture") after brainstorming or debugging has concluded but before an implementation plan is written. Also use when a spec's technical choices depend on library versions, security or cryptography guidance, or other facts that go stale.
 ---
 
-# Senior Specifier
+# Spec Review
 
 ## Overview
 
 Vague requests must not reach the planner. Convert them into a Senior Engineering Task Brief — a precise engineering contract grounded in project evidence, not model memory.
 
-**Core principle: every technical claim in the brief is either evidence-backed (a named file or official source) or a labeled assumption. Nothing in between.**
+**Core principle: factual claims need evidence (a named file or official source); proposed design decisions need project-specific rationale; unknowns need labeled assumptions. Reference each assumption wherever a decision or claim depends on it.**
 
-Workflow position: superpowers:brainstorming or superpowers:systematic-debugging → **senior-specifier** → superpowers:writing-plans. This skill does not brainstorm, plan, implement, or verify — it writes the contract the planner plans from and the verifier checks against.
+Workflow position: superpowers:brainstorming or superpowers:systematic-debugging → **spec-review** → superpowers:writing-plans. This skill does not brainstorm, plan, implement, or verify — it writes the contract the planner plans from and the verifier checks against.
 
 ## Decision rule
 
-If the request already names concrete mechanisms, versions, error formats, and acceptance criteria, pass it through and add only what is missing. Otherwise write the full brief. When context is missing: inspect the project first, make safe assumptions and label them, and ask the user only when a decision is high-risk, irreversible, or impossible to infer.
+If the request already names concrete mechanisms, versions, error formats, and acceptance criteria, preserve its structure and add or correct only what is needed. Otherwise write the full brief. Both paths require the evidence checks below and the handoff check; specificity is not evidence of correctness. Preserve user requirements when correcting technical claims. When context is missing: inspect the project first, make safe assumptions and label them, and ask the user only when a decision is high-risk, irreversible, or impossible to infer.
 
 ## Classify every major recommendation
 
 | Class | Examples | Evidence required |
 |---|---|---|
-| Stable | design principles, dependency direction, test structure, error-handling patterns | engineering judgment is enough |
+| Stable | design principles, dependency direction, test structure, error-handling patterns | project-specific rationale for design decisions; evidence for factual claims they rely on |
 | Version-sensitive | framework/library APIs, package behavior, cloud, database, deploy tooling | exact installed version from lockfile/manifest, plus official docs for that version |
 | Fast-changing / high-risk | security, cryptography, authn/authz, compliance, payments, production infra | authoritative source (OWASP, NIST, vendor docs) and `Needs human review: yes` |
 
@@ -50,14 +50,21 @@ cited as name@version from the lockfile (not caret ranges),
 existing helpers/patterns/conventions the approach must reuse.
 
 ## Concrete technical approach
-The exact pattern, protocol, library, algorithm, data model, or
-interface — and why it fits THIS project. Every major
-recommendation ends with:
-[Confidence: High|Medium|Low — evidence: <file, doc, or "not freshness-verified">]
+The proposed pattern, protocol, library, algorithm, data model, or
+interface — and the project-specific rationale for choosing it.
+Distinguish proposed decisions from observed behavior. Reference
+supporting facts and any assumption IDs each recommendation relies on.
+Every major recommendation ends with:
+[Confidence: High|Medium|Low — basis: <file/doc references, assumption IDs,
+or engineering judgment with the rationale stated above>]
+Mark unchecked version-sensitive claims `not freshness-verified`.
 
 ## Assumptions
-Every unverified claim, one per line, each starting "ASSUMPTION:".
-Verified facts stay in Current context.
+Every unverified factual claim or assumed condition, one per line,
+each starting "ASSUMPTION:" with an ID, e.g. "ASSUMPTION: A1 — ...".
+Reference these IDs wherever the brief depends on them. Proposed
+design decisions belong in Concrete technical approach; observed
+facts belong in Current context.
 
 ## Constraints
 Compatibility, performance, security, reliability, migration,
@@ -74,7 +81,8 @@ observability gaps — what happens in each.
 
 ## Acceptance criteria
 Specific checkable conditions; implementation is complete only when
-all are true.
+all are true. Identify criteria derived from explicit user requirements
+so the handoff check preserves them.
 
 ## Verification plan
 Runnable commands using the project's own runners (cite the actual
@@ -88,9 +96,9 @@ The handoff check is a separate adversarial pass over the finished draft — not
 
 Walk every acceptance criterion and every failure-mode outcome through the brief's own specified changes:
 
-- **Name the mechanism and the check.** Which numbered item of the approach makes this criterion true, in which file — and which named test in the verification plan proves it? No mechanism → add one or fix the criterion. No test → add one.
+- **Name the mechanism and the check.** Which numbered item of the approach makes this criterion true, in which file — and which named test in the verification plan proves it? No mechanism → add one or correct an unsupported draft claim, preserving user requirements. No test → add one.
 - **Trace the real execution path.** Middleware order, framework default handlers, and the declared change surface must actually produce the promised status and shape. A promised JSON 500 requires an error handler inside the change surface; a request rejected by an earlier middleware never reaches the auth check that was supposed to 401 it.
-- **Propagate accepted exceptions into the criterion wording.** When the trace surfaces an exception you accept ("malformed JSON is rejected before auth"), rewrite the criterion to encode it: "every request that reaches the router returns 401" is checkable; "every request returns 401" alongside that exception is a spec bug. A criterion promises only what its mechanism was verified to produce — no promised error shapes or messages beyond what was checked.
+- **Preserve requirements when resolving exceptions.** Distinguish an overstatement introduced by the draft from an explicit user requirement. If the draft invented "every request returns 401" but malformed JSON is rejected before auth, narrow that draft claim to requests reaching the auth check. If the user required the broader behavior, change the mechanism to satisfy it within the authorized scope, or surface the conflict as an unresolved decision for the user. Never silently weaken a user requirement to fit the implementation; keep the affected criterion unresolved until a compliant mechanism or a user-authorized change is established.
 - **Trace repeat runs of anything stateful.** Migrations, backups, seeds, and destructive verification steps (byte-flips, key rotation, file mutation): walk the second run step by step. A verification step that mutates state must restore it, or the plan is one-shot. "Idempotent" claimed without that trace is an assumption, not a criterion.
 - **Every verification command must run in this repo as it exists.** No git commands in a non-repo, no scripts that are not in the manifest.
 
@@ -107,8 +115,8 @@ The generic forms — "use proper error handling", "follow best practices", "wri
 
 ## Common mistakes
 
-- **Library behavior asserted from memory.** Example: "Zod strips unknown keys by default" written unchecked, producing an acceptance criterion (reject unknown fields) that the specified mechanism cannot satisfy (needs `.strict()`). When an acceptance criterion depends on library behavior, verify it for the installed version or name the exact API that provides it.
-- **Facts and guesses interleaved.** Unlabeled assumptions read as facts; the planner inherits them as truth. Assumptions live only in the Assumptions section.
+- **Library behavior asserted from memory.** An unchecked claim about a schema library's handling of unknown keys can produce a rejection criterion that the selected API does not satisfy. When an acceptance criterion depends on library behavior, verify the exact API and behavior for the installed version. Naming an API does not replace verification; if verification is unavailable, record the assumption and mark it `not freshness-verified` without prescribing an unchecked version-specific API.
+- **Facts, decisions, and assumptions conflated.** Unlabeled assumptions read as facts; the planner inherits them as truth. Define assumptions in the Assumptions section and reference their IDs at each dependency. State design decisions as proposals with rationale, not as observed facts or unknowns.
 - **Human-review flag omitted exactly where it matters.** Crypto and auth briefs are the ones that skip it. The flag is the first line, so it cannot be forgotten at the end.
 - **Verification plan with no runnable command.** "Add tests" is not verifiable; the project's real test command exercising named failure cases is.
 - **Caret ranges cited as versions.** `^4.19.2` is a constraint; the lockfile's `4.19.2` is evidence.
