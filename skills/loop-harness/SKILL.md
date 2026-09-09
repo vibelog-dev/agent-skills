@@ -91,7 +91,7 @@ commits fixed what the loop missed):
   naming the missing settings, no traceback" — not "raise ValueError". Naming
   the mechanism caps the Builder at your own first idea.
 - **Standards-adjacent task (auth, wire formats, crypto, protocol)?** Consult
-  the authoritative spec/vendor docs (senior-specifier skill, Context7) BEFORE
+  the authoritative spec/vendor docs (spec-review skill, Context7) BEFORE
   writing the brief, and cite the relevant section in the Requirements. The
   form-encoding bug (RFC 6749 §4.4.2 vs JSON) survived review because nobody
   ever opened the spec.
